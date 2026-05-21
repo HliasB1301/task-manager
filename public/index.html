@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Task Manager</title>
+
+<style>
+body{
+  font-family: Arial;
+  background:#f1f3f4;
+  display:flex;
+  justify-content:center;
+  padding-top:30px;
+}
+
+.container{
+  width:560px;
+  background:white;
+  padding:28px;
+  border-radius:18px;
+  box-shadow:0 8px 25px rgba(0,0,0,0.15);
+}
+
+input, select, button{
+  width:100%;
+  padding:12px;
+  margin:7px 0;
+  border-radius:10px;
+  border:1px solid #ccc;
+  box-sizing:border-box;
+}
+
+button{
+  background:#1a73e8;
+  color:white;
+  border:none;
+  cursor:pointer;
+  font-weight:bold;
+}
+
+.filters{
+  display:flex;
+  gap:8px;
+}
+
+.filters button{
+  background:#e8eaed;
+  color:#333;
+}
+
+.filters .activeBtn{
+  background:#1a73e8;
+  color:white;
+}
+
+.progress{
+  background:#eef2ff;
+  padding:12px;
+  border-radius:10px;
+  margin-top:10px;
+  font-weight:bold;
+  text-align:center;
+}
+
+.task{
+  padding:14px;
+  margin-top:12px;
+  border-radius:12px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  background:#f8f9fa;
+  border-left:6px solid gray;
+}
+
+.high{ border-left-color:#ea4335; }
+.medium{ border-left-color:#fbbc05; }
+.low{ border-left-color:#34a853; }
+
+.overdue{ background:#ffe5e5; }
+.today{ background:#fff4cc; }
+
+.done{
+  text-decoration:line-through;
+  color:gray;
+}
+
+.actions button{
+  width:auto;
+  padding:8px 10px;
+  margin-left:4px;
+}
+
+.delete{ background:#ea4335; }
+.edit{ background:#fbbc05; color:black; }
+</style>
+</head>
+
+<body>
+
+<div class="container">
+<h2>My Tasks</h2>
+
+<input id="taskName" placeholder="Task name">
+<input id="dueDate" type="date">
+
+<select id="priority">
+  <option value="high">High</option>
+  <option value="medium" selected>Medium</option>
+  <option value="low">Low</option>
+</select>
+
+<select id="category">
+  <option value="School">School</option>
+  <option value="Work">Work</option>
+  <option value="Personal">Personal</option>
+  <option value="Project">Project</option>
+</select>
+
+<button onclick="addTask()">Add Task</button>
+
+<input id="searchBox" placeholder="Search task..." onkeyup="loadTasks()">
+
+<div class="filters">
+  <button id="allBtn" class="activeBtn" onclick="setFilter('all')">All</button>
+  <button id="activeBtn" onclick="setFilter('active')">Active</button>
+  <button id="doneBtn" onclick="setFilter('done')">Completed</button>
+</div>
+
+<div class="progress" id="progressBox">Progress: 0 / 0 completed</div>
+
+<h3>Tasks</h3>
+<div id="taskList"></div>
+</div>
+
+<script>
+let currentFilter = "all";
+
+function setFilter(type){
+  currentFilter = type;
+
+  document.getElementById("allBtn").classList.remove("activeBtn");
+  document.getElementById("activeBtn").classList.remove("activeBtn");
+  document.getElementById("doneBtn").classList.remove("activeBtn");
+
+  if(type === "all") document.getElementById("allBtn").classList.add("activeBtn");
+  if(type === "active") document.getElementById("activeBtn").classList.add("activeBtn");
+  if(type === "done") document.getElementById("doneBtn").classList.add("activeBtn");
+
+  loadTasks();
+}
+
+function dueText(date){
+  if(!date) return "No due date";
+
+  const today = new Date();
+  today.setHours(0,0,0,0);
+
+  const due = new Date(date);
+  due.setHours(0,0,0,0);
+
+  const diff = (due - today) / (1000 * 60 * 60 * 24);
+
+  if(diff < 0) return "Overdue";
+  if(diff === 0) return "Due today";
+  if(diff === 1) return "Due tomorrow";
+  return "Due: " + date;
+}
+
+function dueClass(date){
+  if(!date) return "";
+
+  const today = new Date();
+  today.setHours(0,0,0,0);
+
+  const due = new Date(date);
+  due.setHours(0,0,0,0);
+
+  const diff = (due - today) / (1000 * 60 * 60 * 24);
+
+  if(diff < 0) return "overdue";
+  if(diff === 0 || diff === 1) return "today";
+  return "";
+}
+
+async function loadTasks(){
+  const res = await fetch("/alumni");
+  const tasks = await res.json();
+
+  const search = document.getElementById("searchBox").value.toLowerCase();
+  const list = document.getElementById("taskList");
+
+  list.innerHTML = "";
+
+  const total = tasks.length;
+  const completed = tasks.filter(t => t.completed == 1).length;
+  document.getElementById("progressBox").innerHTML =
+    `Progress: ${completed} / ${total} completed`;
+
+  tasks.forEach(task => {
+    const isDone = task.completed == 1;
+
+    if(currentFilter === "active" && isDone) return;
+    if(currentFilter === "done" && !isDone) return;
+    if(!task.name.toLowerCase().includes(search)) return;
+
+    const div = document.createElement("div");
+    div.className = `task ${task.priority || "medium"} ${dueClass(task.school)}`;
+
+    const left = document.createElement("div");
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.style.width = "auto";
+    checkbox.checked = isDone;
+
+    checkbox.onchange = async function(){
+      await updateTask(
+        task.id,
+        task.name,
+        task.school,
+        task.priority,
+        task.category,
+        checkbox.checked
+      );
+    };
+
+    const text = document.createElement("span");
+    text.innerHTML = `
+      <span class="${isDone ? 'done' : ''}">
+        <b>${task.name}</b>
+      </span>
+      <br>
+      <small>${dueText(task.school)} | ${task.priority} | ${task.category}</small>
+    `;
+
+    left.appendChild(checkbox);
+    left.appendChild(text);
+
+    const actions = document.createElement("div");
+    actions.className = "actions";
+
+    const editBtn = document.createElement("button");
+    editBtn.textContent = "Edit";
+    editBtn.className = "edit";
+    editBtn.onclick = async function(){
+      const newName = prompt("Edit task:", task.name);
+      if(!newName) return;
+
+      const newDate = prompt("Edit due date YYYY-MM-DD:", task.school || "");
+      const newPriority = prompt("Priority: high, medium, low", task.priority || "medium");
+      const newCategory = prompt("Category:", task.category || "School");
+
+      await updateTask(
+        task.id,
+        newName,
+        newDate,
+        newPriority,
+        newCategory,
+        isDone
+      );
+    };
+
+    const delBtn = document.createElement("button");
+    delBtn.textContent = "Delete";
+    delBtn.className = "delete";
+    delBtn.onclick = async function(){
+      await fetch("/alumni/" + task.id, { method:"DELETE" });
+      loadTasks();
+    };
+
+    actions.appendChild(editBtn);
+    actions.appendChild(delBtn);
+
+    div.appendChild(left);
+    div.appendChild(actions);
+    list.appendChild(div);
+  });
+}
+
+async function addTask(){
+  const name = document.getElementById("taskName").value;
+  const date = document.getElementById("dueDate").value;
+  const priority = document.getElementById("priority").value;
+  const category = document.getElementById("category").value;
+
+  if(name.trim() === ""){
+    alert("Enter a task name");
+    return;
+  }
+
+  await fetch("/alumni", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body:JSON.stringify({
+      name:name,
+      school:date,
+      year:0,
+      priority:priority,
+      category:category
+    })
+  });
+
+  document.getElementById("taskName").value = "";
+  document.getElementById("dueDate").value = "";
+  document.getElementById("priority").value = "medium";
+  document.getElementById("category").value = "School";
+
+  loadTasks();
+}
+
+async function updateTask(id, name, school, priority, category, completed){
+  await fetch("/alumni/" + id, {
+    method:"PUT",
+    headers:{ "Content-Type":"application/json" },
+    body:JSON.stringify({
+      name:name,
+      school:school,
+      priority:priority,
+      category:category,
+      completed:completed
+    })
+  });
+
+  loadTasks();
+}
+
+loadTasks();
+</script>
+
+</body>
+</html>
