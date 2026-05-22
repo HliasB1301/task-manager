@@ -8,13 +8,15 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static("public"));
 
-const db = mysql.createConnection({
-  host: "localhost",
-  user: "root",
-  password: "",
-  database: "alumnidb"
-});
+const mysql = require("mysql2");
 
+const db = mysql.createConnection({
+  host: process.env.DB_HOST,
+  port: process.env.DB_PORT,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME
+});
 db.connect(err => {
   if (err) console.log("DB error:", err);
   else console.log("MySQL Connected");
@@ -67,6 +69,8 @@ app.delete("/alumni/:id", (req, res) => {
   );
 });
 
-app.listen(3000, () => {
-  console.log("Server running on http://localhost:3000");
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log("Server running on port " + PORT);
 });
